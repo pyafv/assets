@@ -1,0 +1,40 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# uv
+.python-version
+uv.lock
+
+# macOS files
+.DS_Store
+
+# pytest cache
+.pytest_cache/
+
+# pytest coverage files
+.coverage
+htmlcov/
+
+# Cython build files
+*.so
+*.pyd
+*.dll
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Sphinx documentation
+docs/generated/
+docs/_build/
+
+# pytest-benchmark
+benchmark_*.svg
+.benchmarks
