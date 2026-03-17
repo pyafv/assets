@@ -38,3 +38,7 @@ docs/_build/
 # pytest-benchmark
 benchmark_*.svg
 .benchmarks
+
+# Images generated for video frames
+**/frames/**.png
+
