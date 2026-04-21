@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection, PolyCollection
 from tqdm import tqdm
 
 from pyafv import PhysicalParams, FiniteVoronoiSimulator
-
-import numpy as np
 
 
 def tile_pbc_with_index(pts: np.ndarray, r: float, L: float):
@@ -135,6 +134,132 @@ def custom_plot_2d(pts: np.ndarray, diag: dict, r: float, ax=None):
     return ax
 
 
+def custom_plot_2d_fast(pts: np.ndarray, diag: dict, r: float, ax=None):
+    """
+    Faster custom plot function (vectorized version)
+    
+    You can skip this part - it is just an opaque, vectorized reimplementation of the function above.
+    The speedup is especially noticeable when plotting large-N systems and generating many frames for videos.
+    """
+    if ax is None:
+        ax = plt.gca()
+
+    point_edges_type = diag["edges_type"]
+    point_vertices_f_idx = diag["regions"]
+    vertices_all = diag["vertices"]
+    N = len(pts)
+
+    cell_colors = ["C2"] * N
+
+    # --- Classify cells ---
+    cell_lens = np.fromiter((len(et)
+                            for et in point_edges_type), dtype=int, count=N)
+    deg_mask = cell_lens < 2
+    valid_mask = ~deg_mask
+
+    # --- Per-edge geometry (vectorized) ---
+    straight_segs = None
+    arc_xy = None
+    valid_cells_idx = None
+    offsets = None
+    flat_e = None
+    edge_to_arc = None
+    straight_pts = None
+
+    if valid_mask.any():
+        valid_cells_idx = np.where(valid_mask)[0]
+        valid_lens = cell_lens[valid_mask]
+
+        flat_v = np.concatenate(
+            [np.asarray(point_vertices_f_idx[i], dtype=int) for i in valid_cells_idx])
+        flat_e = np.concatenate(
+            [np.asarray(point_edges_type[i], dtype=int) for i in valid_cells_idx])
+        flat_cell = np.repeat(valid_cells_idx, valid_lens)
+
+        offsets = np.concatenate(([0], np.cumsum(valid_lens)))
+        next_idx = np.arange(flat_v.size) + 1
+        next_idx[offsets[1:] - 1] = offsets[:-1]
+        flat_v2 = flat_v[next_idx]
+
+        straight_mask = flat_e == 1
+        arc_mask = flat_e == 0
+
+        if straight_mask.any():
+            straight_segs = np.stack(
+                [vertices_all[flat_v[straight_mask]], vertices_all[flat_v2[straight_mask]]], axis=1)
+
+        # (E, 2); consumed only at straight positions
+        straight_pts = vertices_all[flat_v2]
+
+        if arc_mask.any():
+            centers = pts[flat_cell[arc_mask]]
+            V1a = vertices_all[flat_v[arc_mask]]
+            V2a = vertices_all[flat_v2[arc_mask]]
+            angle1 = np.arctan2(V1a[:, 1] - centers[:, 1],
+                                V1a[:, 0] - centers[:, 0])
+            angle2 = np.arctan2(V2a[:, 1] - centers[:, 1],
+                                V2a[:, 0] - centers[:, 0])
+            total = (angle1 - angle2) % (2 * np.pi)
+            t = np.linspace(0.0, 1.0, 100)
+            theta = angle1[:, None] - t[None, :] * \
+                total[:, None]        # v1 -> v2
+            arc_xy = np.stack([centers[:, 0:1] + r * np.cos(theta),
+                              # (A, 100, 2)
+                               centers[:, 1:2] + r * np.sin(theta)], axis=-1)
+
+            edge_to_arc = np.full(flat_e.size, -1, dtype=int)
+            edge_to_arc[arc_mask] = np.arange(arc_mask.sum())
+
+    # --- Full-circle polylines for degenerate cells ---
+    deg_circles = None
+    deg_idx = None
+    if deg_mask.any():
+        deg_idx = np.where(deg_mask)[0]
+        th = np.linspace(0.0, 2 * np.pi, 100)
+        circle_template = np.column_stack(
+            [np.cos(th), np.sin(th)])      # (100, 2)
+        deg_circles = pts[deg_idx, None, :] + r * \
+            circle_template[None, :, :]   # (D, 100, 2)
+
+    # --- Assemble per-cell fill polygons (ragged list) ---
+    polygons = []
+    face_colors = []
+
+    if valid_mask.any():
+        for c_idx, c in enumerate(valid_cells_idx):
+            s, e = offsets[c_idx], offsets[c_idx + 1]
+            parts = [straight_pts[p:p+1] if flat_e[p] ==
+                     1 else arc_xy[edge_to_arc[p]] for p in range(s, e)]
+            polygons.append(np.concatenate(parts, axis=0))
+            face_colors.append(cell_colors[c])
+
+    if deg_circles is not None:
+        for k, c in enumerate(deg_idx):
+            polygons.append(deg_circles[k])
+            face_colors.append(cell_colors[c])
+
+    # --- Emit collections ---
+    # Fills (zorder=0)
+    if polygons:
+        ax.add_collection(PolyCollection(polygons, facecolors=face_colors, alpha=0.2, linewidths=0, zorder=0))
+
+    # Straight strokes (zorder=2)
+    if straight_segs is not None:
+        ax.add_collection(LineCollection(straight_segs, colors="C0", lw=1.0, zorder=2))
+
+    # Arc + full-circle strokes (zorder=1)
+    arc_polylines = []
+    if arc_xy is not None:
+        arc_polylines.append(arc_xy)
+    if deg_circles is not None:
+        arc_polylines.append(deg_circles)
+    if arc_polylines:
+        ax.add_collection(LineCollection(np.concatenate(arc_polylines, axis=0), colors="C2", lw=1.0, zorder=1))
+
+    ax.set_aspect("equal")
+    return ax
+
+
 # Maximal radius
 radius = 1.0
 
@@ -182,7 +307,7 @@ for _ in tqdm(range(steps)):
     if _ % 50 == 0:
     # Plot the first N cells
         fig, ax = plt.subplots()
-        ax = custom_plot_2d(pts, diag, radius)
+        ax = custom_plot_2d_fast(pts, diag, radius)
         ax.tick_params(axis='both', length=0, labelbottom=False, labelleft=False)
 
         ax.tick_params(axis='both', length=0, labelbottom=False, labelleft=False)
