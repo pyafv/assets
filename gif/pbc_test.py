@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection, PolyCollection
 from tqdm import tqdm
 
-from pyafv import PhysicalParams, FiniteVoronoiSimulator
+from pyafv import PhysicalParams, FiniteVoronoiSimulator, visualize_2d, tile_pbc
 
 
 def tile_pbc_with_index(pts: np.ndarray, r: float, L: float):
@@ -293,7 +293,8 @@ sim = FiniteVoronoiSimulator(pts, phys)
 
 steps = 30_000
 for _ in tqdm(range(steps)):
-    pts_pbc, idx_pbc = tile_pbc_with_index(pts, radius, L)
+    # pts_pbc, idx_pbc = tile_pbc_with_index(pts, radius, L)
+    pts_pbc, idx_pbc = tile_pbc(pts, L, radius)
 
     sim.update_positions(pts_pbc)
     diag = sim.build()
@@ -307,7 +308,10 @@ for _ in tqdm(range(steps)):
     if _ % 50 == 0:
     # Plot the first N cells
         fig, ax = plt.subplots()
-        ax = custom_plot_2d_fast(pts, diag, radius)
+        
+        # ax = custom_plot_2d_fast(pts, diag, radius)
+        visualize_2d(pts, diag, r=radius, ax=ax, fill_alpha=0.2, auto_adjust_bounds=False)
+
         ax.tick_params(axis='both', length=0, labelbottom=False, labelleft=False)
 
         ax.tick_params(axis='both', length=0, labelbottom=False, labelleft=False)
