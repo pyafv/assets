@@ -11,7 +11,7 @@
 ##SBATCH -o %A_%a.out
 
 ###SBATCH -p parallel
-#SBATCH -p shared
+###SBATCH -p shared
 ###SBATCH -p bigmem
 ###SBATCH --qos=qos_bigmem
 
