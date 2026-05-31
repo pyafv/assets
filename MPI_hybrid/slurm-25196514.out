@@ -1,0 +1,14 @@
+
+Lmod is automatically replacing "gcc/9.3.0" with "intel/2020.1".
+
+
+Lmod is automatically replacing "intel-mpi/2019.8.254" with "openmpi/4.1.4".
+
+Python 3.11.11
+Forces match or not (MPI)? True
+Max difference in forces (MPI): 2.0812684908833035e-11
+Rank 1 finished simulation.
+Rank 0 finished simulation.
+Forces match or not (serial)? True
+Max difference in forces (serial): 1.7903456495105274e-11
+Fri May 29 09:07:17 EDT 2026
